@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShieldAlert, CheckCircle, Clock, Users, Coffee, Tag, AlertCircle, Phone } from 'lucide-react';
+import { fetchRecords } from '../services/cloudService';
 
 export default function SearchView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
 
-  const fetchRecords = async (query = '') => {
+  const loadRecords = async (query = '') => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/records?search=${encodeURIComponent(query)}`);
-      const data = await res.json();
+      const data = await fetchRecords(query);
       setRecords(data.records || []);
-      setSearched(true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -22,12 +20,12 @@ export default function SearchView() {
   };
 
   useEffect(() => {
-    fetchRecords('');
+    loadRecords('');
   }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchRecords(searchTerm);
+    loadRecords(searchTerm);
   };
 
   return (
@@ -68,7 +66,7 @@ export default function SearchView() {
           <button
             onClick={() => {
               setSearchTerm('');
-              fetchRecords('');
+              loadRecords('');
             }}
             className="text-indigo-400 hover:underline"
           >
@@ -85,13 +83,15 @@ export default function SearchView() {
       ) : records.length > 0 ? (
         <div className="space-y-3">
           {records.map((item) => {
-            const isHost = item.role === 'host';
-            const dateStr = new Date(item.registeredAt).toLocaleString('ar-EG', {
-              hour: '2-digit',
-              minute: '2-digit',
-              month: 'short',
-              day: 'numeric'
-            });
+            const isHost = item.isHost;
+            const dateStr = item.registeredAt 
+              ? new Date(item.registeredAt).toLocaleString('ar-EG', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  month: 'short',
+                  day: 'numeric'
+                })
+              : '-';
 
             return (
               <div
@@ -117,42 +117,46 @@ export default function SearchView() {
                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
                             : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
                         }`}>
-                          {isHost ? 'صاحب دعوة (Host)' : 'مرافق (Guest)'}
+                          {isHost ? 'صاحب دعوة (Host)' : 'ضيف (Guest)'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-0.5">
                         <span>ID: {item.id}</span>
-                        <span>•</span>
-                        <span className="text-slate-300 flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-slate-500" />
-                          {item.phone || 'بدون رقم'}
-                        </span>
+                        {item.phone && (
+                          <>
+                            <span>•</span>
+                            <span className="text-slate-300 flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-500" />
+                              {item.phone}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   <div className="text-left">
                     <span className="text-[11px] font-mono text-slate-400 block">{dateStr}</span>
-                    <span className="text-[10px] text-slate-500 block font-mono">{item.groupId}</span>
                   </div>
                 </div>
 
                 {/* Details Footer */}
                 <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                  <div className="text-emerald-400 font-bold flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    <span>{item.reward}</span>
-                  </div>
-
-                  {!isHost && item.hostName && (
-                    <div className="text-slate-400 text-[11px]">
-                      بدعوة من: <span className="text-amber-400 font-bold">{item.hostName}</span> ({item.hostPhone || item.hostId})
+                  {item.guestDiscountClaimed ? (
+                    <div className="text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>استفاد من خصم 10% ضيف</span>
+                      {item.claimedUnderHostName && (
+                        <span className="text-slate-400 font-normal"> (بدعوة من: {item.claimedUnderHostName})</span>
+                      )}
                     </div>
+                  ) : (
+                    <span className="text-slate-500">لم يستفد من خصم الضيف بعد</span>
                   )}
 
                   {isHost && (
-                    <div className="text-slate-400 text-[11px]">
-                      معه: <span className="text-teal-400 font-bold">{item.friendsCount || 4} أصدقاء</span>
+                    <div className="text-amber-400 font-mono font-bold text-xs">
+                      عزم {item.referralsCount || 0} أصدقاء
                     </div>
                   )}
                 </div>
@@ -165,7 +169,7 @@ export default function SearchView() {
           <AlertCircle className="w-8 h-8 text-slate-500 mx-auto" />
           <h3 className="text-sm font-bold text-slate-300">لم يتم العثور على أي نتائج</h3>
           <p className="text-xs text-slate-500">
-            {searchTerm ? `البيانات الخاصة بـ "${searchTerm}" غير مسجلة في قاعدة البيانات، مما يعني أنه لم يستلم العرض بعد.` : 'لا يوجد طلاب مسجلين حتى الآن.'}
+            {searchTerm ? `البيانات الخاصة بـ "${searchTerm}" غير مسجلة في قاعدة البيانات.` : 'لا يوجد طلاب مسجلين حتى الآن.'}
           </p>
         </div>
       )}

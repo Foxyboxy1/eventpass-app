@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Coffee, Tag, AlertTriangle, CheckCircle, Plus, 
-  Camera, Sparkles, AlertCircle, RefreshCw, Phone, User, Users
+  Camera, Sparkles, AlertCircle, RefreshCw, Phone, User, Users, Cloud
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { lookupStudent, submitOrderWithReferral, isFirebaseActive } from '../services/cloudService';
 
 export default function RegistrationView({ 
   settings, 
@@ -33,7 +34,7 @@ export default function RegistrationView({
   const [submitting, setSubmitting] = useState(false);
   const [generalError, setGeneralError] = useState('');
 
-  // 1. Live Check Customer status whenever customerId changes
+  // 1. Live Check Customer status
   useEffect(() => {
     const trimmed = customerId.trim();
     if (!trimmed || trimmed.length < 3) {
@@ -45,8 +46,7 @@ export default function RegistrationView({
     const timer = setTimeout(async () => {
       setCustomerCheckStatus('checking');
       try {
-        const res = await fetch(`/api/lookup/${encodeURIComponent(trimmed)}`);
-        const data = await res.json();
+        const data = await lookupStudent(trimmed);
         if (data.found) {
           const student = data.student;
           setCustomerExistingRecord(student);
@@ -71,7 +71,7 @@ export default function RegistrationView({
     return () => clearTimeout(timer);
   }, [customerId]);
 
-  // 2. Fetch Host data whenever hostId changes
+  // 2. Fetch Host data
   useEffect(() => {
     const trimmed = hostId.trim();
     if (!trimmed || trimmed.length < 3) {
@@ -82,8 +82,7 @@ export default function RegistrationView({
     const timer = setTimeout(async () => {
       setHostLoading(true);
       try {
-        const res = await fetch(`/api/lookup/${encodeURIComponent(trimmed)}`);
-        const data = await res.json();
+        const data = await lookupStudent(trimmed);
         if (data.found) {
           setHostData(data.student);
           if (data.student.name && !hostName) setHostName(data.student.name);
@@ -133,37 +132,23 @@ export default function RegistrationView({
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/order-with-referral', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customerId.trim(),
-          customerName: customerName.trim(),
-          customerPhone: customerPhone.trim(),
-          orderItem: orderItem.trim(),
-          hostId: hostId.trim(),
-          hostNameIfNew: hostName.trim(),
-          hostPhoneIfNew: hostPhone.trim(),
-          staffName
-        })
+      const data = await submitOrderWithReferral({
+        customerId: customerId.trim(),
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        orderItem: orderItem.trim(),
+        hostId: hostId.trim(),
+        hostNameIfNew: hostName.trim(),
+        hostPhoneIfNew: hostPhone.trim(),
+        staffName
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setGeneralError(data.error || 'حدث خطأ أثناء تسجيل الأوردر');
-        setSubmitting(false);
-        return;
-      }
-
-      // Celebrate!
       confetti({
         particleCount: data.hostProgress?.justUnlockedFreeDrink ? 140 : 70,
         spread: 75,
         origin: { y: 0.6 }
       });
 
-      // Clear customer form for next person in line
       setCustomerId('');
       setCustomerName('');
       setCustomerPhone('');
@@ -173,7 +158,7 @@ export default function RegistrationView({
       onSuccessOrder(data);
     } catch (err) {
       console.error(err);
-      setGeneralError('تعذر الاتصال بالخادم، يرجى المحاولة ثانية.');
+      setGeneralError(err.message || 'تعذر تسجيل الأوردر، يرجى المحاولة ثانية.');
     } finally {
       setSubmitting(false);
     }
@@ -193,7 +178,14 @@ export default function RegistrationView({
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-white">تسجيل الأوردر والربط بصاحب العزومة 🎯</h2>
+            <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+              <span>تسجيل الأوردر والربط بصاحب العزومة 🎯</span>
+              {isFirebaseActive() && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono flex items-center gap-1">
+                  <Cloud className="w-3 h-3" /> Cloud Live
+                </span>
+              )}
+            </h2>
             <p className="text-xs text-indigo-300">
               الضيف ياخد <span className="font-bold text-teal-300">10% خصم</span> • وصاحب العزومة يجمّع 5 وياخد <span className="font-bold text-amber-300">فري درينك 🥤 (لمرة واحدة)</span>
             </p>
@@ -338,7 +330,7 @@ export default function RegistrationView({
           </div>
         </div>
 
-        {/* 2. Host Linking Section (الربط بصاحب العزومة) */}
+        {/* 2. Host Linking Section */}
         <div className="pt-3 border-t border-slate-800 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

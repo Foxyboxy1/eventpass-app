@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Coffee, CheckCircle, Gift, RefreshCw, AlertCircle, Phone, User, Clock, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { fetchStats, redeemFreeDrink } from '../services/cloudService';
 
 export default function HostRedeemView() {
   const [hosts, setHosts] = useState([]);
@@ -8,11 +9,10 @@ export default function HostRedeemView() {
   const [redeemingId, setRedeemingId] = useState(null);
   const [message, setMessage] = useState(null);
 
-  const fetchStats = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/stats');
-      const data = await res.json();
+      const data = await fetchStats();
       setHosts(data.hosts || []);
     } catch (err) {
       console.error(err);
@@ -22,33 +22,24 @@ export default function HostRedeemView() {
   };
 
   useEffect(() => {
-    fetchStats();
+    loadData();
   }, []);
 
   const handleRedeem = async (hostId) => {
     setRedeemingId(hostId);
     setMessage(null);
     try {
-      const res = await fetch('/api/redeem-free-drink', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostId, staffName: 'كاشير' })
+      const res = await redeemFreeDrink(hostId);
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
       });
-      const data = await res.json();
-      if (res.ok) {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
-        setMessage({ type: 'success', text: data.message });
-        fetchStats();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'تعذر الصرف' });
-      }
+      setMessage({ type: 'success', text: res.message });
+      loadData();
     } catch (err) {
       console.error(err);
-      setMessage({ type: 'error', text: 'خطأ في الاتصال بالسيرفر' });
+      setMessage({ type: 'error', text: err.message || 'تعذر الصرف' });
     } finally {
       setRedeemingId(null);
     }
@@ -63,7 +54,7 @@ export default function HostRedeemView() {
           <p className="text-xs text-slate-400">متابعة وصرف المشروب المجاني لكل مُضيف جمع 5 أصدقاء (مشروب واحد فقط)</p>
         </div>
         <button
-          onClick={fetchStats}
+          onClick={loadData}
           disabled={loading}
           className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition"
         >
