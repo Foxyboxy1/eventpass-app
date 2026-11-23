@@ -1,0 +1,28 @@
+{
+  "settings": {
+    "eventName": "إيفنت الجامعة الترحيبي",
+    "venueName": "كافيه / لاونج المكان",
+    "targetReferralsForDrink": 5,
+    "discountValue": "10%",
+    "adminPin": "1234",
+    "minFriendsForDrink": 4
+  },
+  "students": {
+    "202304499": {
+      "id": "202304499",
+      "name": "لوكا (المدير)",
+      "phone": "01000000000",
+      "isHost": true,
+      "guestDiscountClaimed": false,
+      "claimedUnderHostId": null,
+      "claimedUnderHostName": null,
+      "claimedAt": null,
+      "referralsCount": 0,
+      "referralsList": [],
+      "freeDrinksEarned": 0,
+      "freeDrinksClaimed": 0,
+      "registeredAt": "2026-11-23T18:48:28.662Z"
+    }
+  },
+  "orders": []
+}
