@@ -1,39 +1,29 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { 
-  getFirestore, doc, getDoc, setDoc, updateDoc, 
-  collection, getDocs, addDoc, query, orderBy, limit 
+  getFirestore, doc, getDoc, setDoc, 
+  collection, getDocs, addDoc 
 } from 'firebase/firestore';
 import { firebaseConfig } from '../firebaseConfig';
 
 let dbFirestore = null;
 
-// Initialize Firebase if config has projectId
 try {
-  const savedConfig = localStorage.getItem('eventpass_firebase_config');
-  const activeConfig = savedConfig ? JSON.parse(savedConfig) : firebaseConfig;
-
-  if (activeConfig && activeConfig.projectId) {
-    const app = getApps().length === 0 ? initializeApp(activeConfig) : getApps()[0];
+  if (firebaseConfig && firebaseConfig.projectId) {
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     dbFirestore = getFirestore(app);
-    console.log('[Cloud DB] Firebase Firestore connected successfully!');
+    console.log('[Cloud DB] Firebase Firestore connected successfully to project:', firebaseConfig.projectId);
   }
 } catch (e) {
-  console.warn('[Cloud DB] Firebase not configured yet, using API fallback.', e);
+  console.warn('[Cloud DB] Firebase initialization error:', e);
 }
 
 export const isFirebaseActive = () => Boolean(dbFirestore);
-
-export const saveFirebaseConfig = (config) => {
-  localStorage.setItem('eventpass_firebase_config', JSON.stringify(config));
-  window.location.reload();
-};
 
 // 1. Lookup a student by ID
 export async function lookupStudent(studentId) {
   const cleanId = String(studentId || '').trim();
   if (!cleanId) return { found: false };
 
-  // If Firebase active
   if (dbFirestore) {
     try {
       const docRef = doc(dbFirestore, 'students', cleanId);
@@ -63,14 +53,13 @@ export async function submitOrderWithReferral(orderData) {
   const cleanCustomerId = String(customerId).trim();
   const cleanHostId = String(hostId).trim();
 
-  // If Firebase active
   if (dbFirestore) {
     // 1. Check if customer already claimed guest discount
     const custRef = doc(dbFirestore, 'students', cleanCustomerId);
     const custSnap = await getDoc(custRef);
     if (custSnap.exists() && custSnap.data().guestDiscountClaimed) {
       const prev = custSnap.data();
-      throw new Error(`⚠️ الطالب (${prev.name}) استفاد بالفعل من خصم الـ 10% سابقاً كمدعو من (${prev.claimedUnderHostName || prev.claimedUnderHostId})!`);
+      throw new Error(`⚠️ الطالب (${prev.name}) استفاد بالفعل من خصم الـ 10% سابقاً كمدعو من (${prev.claimedUnderHostName || prev.claimedUnderHostId})! لا يمكن أخذ الخصم كضيف مرة أخرى.`);
     }
 
     // 2. Check Host
@@ -135,6 +124,8 @@ export async function submitOrderWithReferral(orderData) {
     };
     await addDoc(collection(dbFirestore, 'orders'), orderRecord);
 
+    const justUnlocked = host.referralsCount === 5 && host.freeDrinksClaimed === 0;
+
     return {
       success: true,
       message: `تم تسجيل أوردر ${customerName} بنجاح بخصم 10%!`,
@@ -147,7 +138,7 @@ export async function submitOrderWithReferral(orderData) {
         freeDrinksEarned: host.freeDrinksEarned,
         freeDrinksClaimed: host.freeDrinksClaimed,
         unclaimedDrinks: Math.max(0, host.freeDrinksEarned - host.freeDrinksClaimed),
-        justUnlockedFreeDrink: host.referralsCount === 5 && host.freeDrinksClaimed === 0
+        justUnlockedFreeDrink: justUnlocked
       }
     };
   }
@@ -174,10 +165,10 @@ export async function redeemFreeDrink(hostId) {
 
     const host = hostSnap.data();
     if ((host.freeDrinksClaimed || 0) >= 1) {
-      throw new Error('⚠️ تم صرف المشروب المجاني لهذا المُضيف مسبقاً (الحد الأقصى مشروب واحد فقط)');
+      throw new Error('⚠️ تم صرف المشروب المجاني لهذا المُضيف مسبقاً (الحد الأقصى للعرض: مشروب واحد فقط)');
     }
     if ((host.referralsCount || 0) < 5) {
-      throw new Error('لم يكتمل الـ 5 أصدقاء المطلوبين بعد');
+      throw new Error('لم يكتمل الـ 5 أصدقاء المطلوبين بعد (الحالي: ' + (host.referralsCount || 0) + ' من 5)');
     }
 
     host.freeDrinksClaimed = 1;
@@ -185,7 +176,7 @@ export async function redeemFreeDrink(hostId) {
 
     return {
       success: true,
-      message: `تم صرف المشروب المجاني لـ (${host.name}) بنجاح! 🥤`
+      message: `تم صرف المشروب المجاني لـ (${host.name}) بنجاح! 🥤 (استوفى العرض بالكامل)`
     };
   }
 
@@ -251,4 +242,47 @@ export async function fetchRecords(query = '') {
 
   const res = await fetch(`/api/records?search=${encodeURIComponent(cleanQ)}`);
   return await res.json();
+}
+
+// 6. Direct Client-side CSV Download (Works anywhere on Vercel without backend!)
+export async function exportCsvClientSide() {
+  let list = [];
+  if (dbFirestore) {
+    const snap = await getDocs(collection(dbFirestore, 'students'));
+    list = snap.docs.map(d => d.data());
+  } else {
+    const res = await fetch('/api/records');
+    const data = await res.json();
+    list = data.records || [];
+  }
+
+  list.sort((a, b) => new Date(a.registeredAt || 0) - new Date(b.registeredAt || 0));
+
+  let csv = '\uFEFFرقم الـ ID,الاسم بالكامل,رقم الموبايل,استفاد من خصم 10% ضيف,اسم العازم (صاحب الدعوة),ID العازم,عدد الأشخاص اللي عزمهم,مشروب مجاني مستحق,مشروب مجاني تم صرفه,تاريخ ووقت التسجيل\n';
+
+  list.forEach(item => {
+    const timeFormatted = item.registeredAt ? new Date(item.registeredAt).toLocaleString('ar-EG') : '-';
+    const row = [
+      `"${item.id}"`,
+      `"${item.name || '-'}"`,
+      `"${item.phone || '-'}"`,
+      `"${item.guestDiscountClaimed ? 'نعم (10%)' : 'لا'}"`,
+      `"${item.claimedUnderHostName || '-'}"`,
+      `"${item.claimedUnderHostId || '-'}"`,
+      `"${item.referralsCount || 0}"`,
+      `"${item.freeDrinksEarned || 0}"`,
+      `"${item.freeDrinksClaimed || 0}"`,
+      `"${timeFormatted}"`
+    ];
+    csv += row.join(',') + '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `eventpass_crm_${Date.now()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

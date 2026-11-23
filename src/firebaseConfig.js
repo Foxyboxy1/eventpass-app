@@ -1,10 +1,10 @@
-// إعدادات Firebase Firestore السحابية (مجانية 100% بدون أي كارت بنكي)
-// يمكنك جلب هذه القيم في دقيقة واحدة من console.firebase.google.com
+// Firebase Configuration for eventpaengo (Spark Plan - 100% Free Cloud Database)
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
+  apiKey: "AIzaSyC-ExQmN_6upBu8BrZIwOqWSKgfWATKSSY",
+  authDomain: "eventpaengo.firebaseapp.com",
+  projectId: "eventpaengo",
+  storageBucket: "eventpaengo.firebasestorage.app",
+  messagingSenderId: "860940492182",
+  appId: "1:860940492182:web:7f02fbf3b8cb1fe10111b7",
+  measurementId: "G-8JXKD14JL3"
 };
